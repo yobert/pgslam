@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"os/signal"
 	"sync/atomic"
@@ -11,11 +12,16 @@ import (
 )
 
 const (
-	workers = 90
+	workers = 800
 	inserts = 100
-	selects = 10
+	selects = 100
 	updates = 10000
-	deletes = 0
+	deletes = 100
+
+	preload      = 10000000
+	preloadBatch = 10000
+
+	slew = 10000
 
 	table = `garbage`
 )
@@ -25,6 +31,11 @@ var (
 	selectCount int64
 	updateCount int64
 	deleteCount int64
+	workerCount int64
+
+	config = pgx.ConnConfig{
+		Database: "sup",
+	}
 )
 
 func main() {
@@ -35,10 +46,7 @@ func main() {
 }
 
 func run() error {
-	conn, err := pgx.Connect(pgx.ConnConfig{
-		Database:             "sup",
-		PreferSimpleProtocol: true,
-	})
+	conn, err := pgx.Connect(config)
 	if err != nil {
 		return err
 	}
@@ -48,12 +56,20 @@ func run() error {
 		}
 	}()
 
-	if _, err := conn.Exec(`drop table if exists ` + table + `;`); err != nil {
+	if _, err := conn.Exec(`create table if not exists ` + table + ` (id serial not null primary key, name text);`); err != nil {
 		return err
 	}
-	if _, err := conn.Exec(`create table ` + table + ` (id serial not null primary key, name text) with (fillfactor = 50);`); err != nil {
+
+	var count int
+	if err := conn.QueryRow(`select count(1) from ` + table + `;`).Scan(&count); err != nil {
 		return err
 	}
+	preloadLeft := preload - count
+	if preloadLeft < 0 {
+		preloadLeft = 0
+	}
+
+	fmt.Printf("%d existing rows (%d more to preload)\n", count, preloadLeft)
 
 	workersDone := make(chan struct{}, workers)
 	done := make(chan struct{})
@@ -64,7 +80,7 @@ func run() error {
 
 	for i := 0; i < workers; i++ {
 		go func(ii int) {
-			err := worker(ii, done)
+			err := worker(ii, done, preloadLeft/workers)
 			if err != nil {
 				fmt.Println("worker", ii, "error:", err)
 			}
@@ -81,15 +97,15 @@ func run() error {
 	return nil
 }
 
-func worker(idx int, done chan struct{}) error {
+func worker(idx int, done chan struct{}, preloadLeft int) error {
+	time.Sleep(time.Duration(rand.Intn(slew)) * time.Millisecond)
+	atomic.AddInt64(&workerCount, 1)
+
 	var (
 		loop, i int
 	)
 
-	conn, err := pgx.Connect(pgx.ConnConfig{
-		Database:             "sup",
-		PreferSimpleProtocol: true,
-	})
+	conn, err := pgx.Connect(config)
 	if err != nil {
 		return err
 	}
@@ -98,6 +114,22 @@ func worker(idx int, done chan struct{}) error {
 			fmt.Println("worker", idx, "database close error:", err)
 		}
 	}()
+
+	i = 0
+	for i < preloadLeft {
+		select {
+		case <-done:
+			return nil
+		default:
+		}
+
+		if _, err := conn.Exec(`insert into `+table+` (name) select $1 || i::text from generate_series(0, $2) as t(i);`,
+			fmt.Sprintf("worker %d preloaded row ", idx), preloadBatch); err != nil {
+			return err
+		}
+		i += preloadBatch
+		atomic.AddInt64(&insertCount, preloadBatch)
+	}
 
 	for {
 		stuff := make(map[int]string)
@@ -241,13 +273,15 @@ func stats(done chan struct{}) {
 		q := i + s + u + d
 		t := time.Now()
 		delta := t.Sub(lastt).Seconds()
+		wc := atomic.LoadInt64(&workerCount)
 
-		line = fmt.Sprintf("%10.0f i %10.0f s %10.0f u %10.0f d %10.0f qps",
+		line = fmt.Sprintf("%10.0f i %10.0f s %10.0f u %10.0f d %10.0f q / second (%d workers)",
 			float64(i-lasti)/delta,
 			float64(s-lasts)/delta,
 			float64(u-lastu)/delta,
 			float64(d-lastd)/delta,
 			float64(q-lastq)/delta,
+			wc,
 		)
 
 		fmt.Print(line)
