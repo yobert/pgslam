@@ -12,11 +12,11 @@ import (
 )
 
 const (
-	workers = 800
-	inserts = 100
-	selects = 100
-	updates = 10000
-	deletes = 100
+	workers = 10
+	inserts = 10
+	selects = 100000
+	updates = 10
+	deletes = 10
 
 	preload      = 10000000
 	preloadBatch = 10000
@@ -24,6 +24,8 @@ const (
 	slew = 10000
 
 	table = `garbage`
+
+	refresh = 30
 )
 
 var (
@@ -34,6 +36,7 @@ var (
 	workerCount int64
 
 	config = pgx.ConnConfig{
+		Host: "/var/run/postgresql/.s.PGSQL.5432",
 		Database: "sup",
 	}
 )
@@ -100,6 +103,7 @@ func run() error {
 func worker(idx int, done chan struct{}, preloadLeft int) error {
 	time.Sleep(time.Duration(rand.Intn(slew)) * time.Millisecond)
 	atomic.AddInt64(&workerCount, 1)
+	defer atomic.AddInt64(&workerCount, -1)
 
 	var (
 		loop, i int
@@ -241,6 +245,7 @@ func worker(idx int, done chan struct{}, preloadLeft int) error {
 func stats(done chan struct{}) {
 	line := ""
 	bs := ""
+	space := ""
 
 	var (
 		lasti int64
@@ -259,11 +264,9 @@ func stats(done chan struct{}) {
 		default:
 		}
 
-		time.Sleep(time.Millisecond * 1000)
+		time.Sleep(time.Millisecond * refresh)
 
-		for len(bs) < len(line) {
-			bs = bs + "\b"
-		}
+		fmt.Print(space[0:len(line)])
 		fmt.Print(bs[0:len(line)])
 
 		i := atomic.LoadInt64(&insertCount)
@@ -285,6 +288,15 @@ func stats(done chan struct{}) {
 		)
 
 		fmt.Print(line)
+
+		for len(space) < len(line) {
+			space = space + " "
+		}
+		for len(bs) < len(line) {
+			bs = bs + "\b"
+		}
+
+		fmt.Print(bs[0:len(line)])
 
 		lasti = i
 		lasts = s
