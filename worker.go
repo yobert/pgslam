@@ -51,7 +51,6 @@ func worker(config *Config, done chan struct{}) {
 			fmt.Println(err)
 			return
 		}
-		//		fmt.Println(len(stuff), "things to select from")
 	}
 
 	bucket_times := make([]time.Duration, rate_buckets)
