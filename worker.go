@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"math/rand"
 	"sync"
@@ -31,6 +32,28 @@ func worker(config *Config, done chan struct{}) {
 	// Try not to all activate at the same time
 	time.Sleep(time.Duration(rand.Intn(1000)) * time.Millisecond)
 
+	var stuff []time.Time
+	if config.Op == "select" {
+		rows, err := conn.Query(`select ` + config.Column + ` from ` + config.Table + ` limit 1000;`)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		for rows.Next() {
+			var s time.Time
+			if err := rows.Scan(&s); err != nil {
+				fmt.Println(err)
+				return
+			}
+			stuff = append(stuff, s)
+		}
+		if err := rows.Err(); err != nil {
+			fmt.Println(err)
+			return
+		}
+		//		fmt.Println(len(stuff), "things to select from")
+	}
+
 	bucket_times := make([]time.Duration, rate_buckets)
 	bucket_count := make([]int, rate_buckets)
 	bucket_i := 0
@@ -47,8 +70,21 @@ func worker(config *Config, done chan struct{}) {
 
 		start := time.Now()
 
-		if _, err := conn.Exec(`insert into `+config.Table+` (data) values ($1);`, "some crap"); err != nil {
-			log.Println(err)
+		switch config.Op {
+		case "insert":
+			if _, err := conn.Exec(`insert into `+config.Table+` (data) values ($1);`, "some crap"); err != nil {
+				log.Println(err)
+				return
+			}
+		case "select":
+			var id int
+			err := conn.QueryRow(`select id from `+config.Table+` where `+config.Column+` = $1 limit 1;`, stuff[rand.Intn(len(stuff))]).Scan(&id)
+			if err != nil {
+				log.Println(err)
+				return
+			}
+		default:
+			log.Printf("Unknown worker operation %#v\n", config.Op)
 			return
 		}
 

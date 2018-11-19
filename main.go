@@ -17,14 +17,9 @@ func main() {
 }
 
 func run() error {
-	configs := []*Config{}
-
-	for _, filename := range os.Args[1:] {
-		config, err := loadconfig(filename)
-		if err != nil {
-			return err
-		}
-		configs = append(configs, config)
+	configs, err := getconfigs()
+	if err != nil {
+		return err
 	}
 
 	for i, config := range configs {
@@ -38,7 +33,9 @@ func run() error {
 }
 
 func runconfig(config *Config) error {
-	fmt.Println("schema...")
+	fmt.Println(config)
+
+	//	fmt.Println("schema...")
 	if err := prepSchema(config); err != nil {
 		return err
 	}
@@ -50,7 +47,7 @@ func runconfig(config *Config) error {
 	}
 
 	// give them a second to prime and connect
-	fmt.Println("priming...")
+	//	fmt.Println("priming...")
 	time.Sleep(time.Second * 2)
 
 	work_mu.Lock()
@@ -73,15 +70,19 @@ func runconfig(config *Config) error {
 
 		tt := time.Now()
 
-		fmt.Printf("%.2f/s %s/op\n",
-			float64(c-last_count)/tt.Sub(t).Seconds(),
-			(d-last_dur)/time.Duration(c-last_count),
-		)
+		if c-last_count > 0 {
+			fmt.Printf("%.2f/s %s/op\n",
+				float64(c-last_count)/tt.Sub(t).Seconds(),
+				(d-last_dur)/time.Duration(c-last_count),
+			)
+		} else {
+			fmt.Println("-----/s -/op")
+		}
 		t = tt
 		last_count = c
 		last_dur = d
 
-		if time.Since(start) > config.Dur {
+		if config.Dur != 0 && time.Since(start) > config.Dur {
 			break
 		}
 	}
