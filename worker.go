@@ -32,15 +32,23 @@ func worker(config *Config, done chan struct{}) {
 	// Try not to all activate at the same time
 	time.Sleep(time.Duration(rand.Intn(1000)) * time.Millisecond)
 
-	var stuff []time.Time
-	if config.Op == "select" {
-		rows, err := conn.Query(`select ` + config.Column + ` from ` + config.Table + ` limit 1000;`)
+	//var stuff []time.Time
+	var stuff []string
+	if config.Op == "select" || config.Op == "join" {
+		tab := config.Table
+		col := config.Column
+		if config.Op == "join" {
+			tab = "calendars"
+			col = "calendar_id"
+		}
+
+		rows, err := conn.Query(`select ` + col + `::text from ` + tab + ` limit 1000;`)
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
 		for rows.Next() {
-			var s time.Time
+			var s string
 			if err := rows.Scan(&s); err != nil {
 				fmt.Println(err)
 				return
@@ -78,6 +86,32 @@ func worker(config *Config, done chan struct{}) {
 		case "select":
 			var id int
 			err := conn.QueryRow(`select id from `+config.Table+` where `+config.Column+` = $1 limit 1;`, stuff[rand.Intn(len(stuff))]).Scan(&id)
+			if err != nil {
+				log.Println(err)
+				return
+			}
+		case "join":
+			res := struct {
+				CompanyID  int
+				UserID     int
+				CalendarID int
+				EventID    int
+			}{}
+
+			err := conn.QueryRow(`
+select
+	c.company_id,
+	u.user_id,
+	ca.calendar_id,
+	e.event_id
+from companies as c
+inner join users as u on u.company_id = c.company_id
+inner join calendars as ca on ca.user_id = u.user_id
+inner join events as e on e.calendar_id = ca.calendar_id
+where ca.calendar_id = $1 and e.created_at > now() - $2::interval;`,
+				stuff[rand.Intn(len(stuff))],
+				"1 day",
+			).Scan(&res.CompanyID, &res.UserID, &res.CalendarID, &res.EventID)
 			if err != nil {
 				log.Println(err)
 				return

@@ -104,6 +104,11 @@ create table if not exists events (
 	name text
 );
 
+create index if not exists e1 on events (created_at);
+create index if not exists e2 on events (calendar_id);
+create index if not exists e3 on events (start_at);
+create index if not exists e4 on events (end_at);
+
 create table if not exists participants (
 	participant_id bigserial not null primary key,
 	event_id bigint not null references events,
@@ -116,7 +121,7 @@ create table if not exists participants (
 
 	if err := t_load(conn, "companies",
 		`insert into companies (name) select $1 || i::text from generate_series(1, $2) as t(i);`,
-		"company ", 1000); err != nil {
+		"company ", 100); err != nil {
 		return err
 	}
 
@@ -180,7 +185,7 @@ func t_load_for(config *Config, table string, ltable string, load string, sql st
 
 	sqlbuf := ""
 
-	worker_count := 64
+	worker_count := 32
 	work := make(chan string, worker_count)
 	workerr := make(chan error)
 
