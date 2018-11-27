@@ -88,12 +88,16 @@ create table if not exists users (
 	name text
 );
 
+create index if not exists u1 on users (company_id);
+
 create table if not exists calendars (
 	calendar_id bigserial not null primary key,
 	created_at timestamptz not null default now(),
 	user_id bigint not null references users,
 	name text
 );
+
+create index if not exists ca1 on calendars (user_id);
 
 create table if not exists events (
 	event_id bigserial not null primary key,
@@ -119,7 +123,7 @@ create table if not exists participants (
 		return err
 	}
 
-	if err := t_load(conn, "companies",
+/*	if err := t_load(conn, "companies",
 		`insert into companies (name) select $1 || i::text from generate_series(1, $2) as t(i);`,
 		"company ", 100); err != nil {
 		return err
@@ -145,7 +149,7 @@ create table if not exists participants (
 		500,
 	); err != nil {
 		return err
-	}
+	}*/
 
 	return nil
 }
@@ -224,8 +228,8 @@ func t_load_for(config *Config, table string, ltable string, load string, sql st
 
 		sqlbuf += fillout_query(sql, nargs...) + "\n"
 
-		// 1k of sql at a time
-		if len(sqlbuf) > 1e3 {
+		// 512 bytes of sql at a time
+		if len(sqlbuf) > 512 {
 			work <- sqlbuf
 			sqlbuf = ""
 		}

@@ -34,7 +34,7 @@ func worker(config *Config, done chan struct{}) {
 
 	//var stuff []time.Time
 	var stuff []string
-	if config.Op == "select" || config.Op == "join" {
+	if config.Op == "select" || config.Op == "join" || config.Op == "update" {
 		tab := config.Table
 		col := config.Column
 		if config.Op == "join" {
@@ -87,6 +87,11 @@ func worker(config *Config, done chan struct{}) {
 			var id int
 			err := conn.QueryRow(`select id from `+config.Table+` where `+config.Column+` = $1 limit 1;`, stuff[rand.Intn(len(stuff))]).Scan(&id)
 			if err != nil {
+				log.Println(err)
+				return
+			}
+		case "update":
+			if _, err := conn.Exec(`update `+config.Table+` set data = $1 where `+config.Column+` = $2;`, "updated value", stuff[rand.Intn(len(stuff))]); err != nil {
 				log.Println(err)
 				return
 			}
