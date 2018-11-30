@@ -74,82 +74,13 @@ create index if not exists t5a on t5 (a);
 create index if not exists t5b on t5 (b);
 create index if not exists t5c on t5 (c);
 create index if not exists t5d on t5 (d);
-
-create table if not exists companies (
-	company_id bigserial not null primary key,
-	created_at timestamptz not null default now(),
-	name text
-);
-
-create table if not exists users (
-	user_id bigserial not null primary key,
-	created_at timestamptz not null default now(),
-	company_id bigint not null references companies,
-	name text
-);
-
-create index if not exists u1 on users (company_id);
-
-create table if not exists calendars (
-	calendar_id bigserial not null primary key,
-	created_at timestamptz not null default now(),
-	user_id bigint not null references users,
-	name text
-);
-
-create index if not exists ca1 on calendars (user_id);
-
-create table if not exists events (
-	event_id bigserial not null primary key,
-	created_at timestamptz not null default now(),
-	calendar_id bigint not null references calendars,
-	start_at timestamptz not null default now(),
-	end_at timestamptz not null default now(),
-	name text
-);
-
-create index if not exists e1 on events (created_at);
-create index if not exists e2 on events (calendar_id);
-create index if not exists e3 on events (start_at);
-create index if not exists e4 on events (end_at);
-
-create table if not exists participants (
-	participant_id bigserial not null primary key,
-	event_id bigint not null references events,
-	user_id bigint not null references users,
-	name text
-);
 `); err != nil {
 		return err
 	}
 
-/*	if err := t_load(conn, "companies",
-		`insert into companies (name) select $1 || i::text from generate_series(1, $2) as t(i);`,
-		"company ", 100); err != nil {
+	if err := t_load(conn, "t1", 1e6, "insert into t1 (a) select now() from generate_series(1, COUNT);"); err != nil {
 		return err
 	}
-
-	if err := t_load_for(config, "users", "companies",
-		`select company_id from companies;`,
-		`insert into users (company_id, name) select $1::bigint, $2 from generate_series(1, $3) as t(i);`,
-		"user", 1000); err != nil {
-		return err
-	}
-
-	if err := t_load_for(config, "calendars", "users",
-		`select user_id from users;`,
-		`insert into calendars (user_id) values ($1::bigint);`,
-	); err != nil {
-		return err
-	}
-
-	if err := t_load_for(config, "events", "calendars",
-		`select calendar_id from calendars;`,
-		`insert into events (calendar_id) select $1::bigint from generate_series(1, $2) as t(i);`,
-		500,
-	); err != nil {
-		return err
-	}*/
 
 	return nil
 }
