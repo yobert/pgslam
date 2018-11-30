@@ -78,9 +78,9 @@ create index if not exists t5d on t5 (d);
 		return err
 	}
 
-	if err := t_load(conn, "t1", 1e6, "insert into t1 (a) select now() from generate_series(1, COUNT);"); err != nil {
-		return err
-	}
+//	if err := t_load(conn, "t1", 1e6, "insert into t1 (a) select now() from generate_series(1, COUNT);"); err != nil {
+//		return err
+//	}
 
 	return nil
 }
@@ -211,7 +211,7 @@ func quotestring(str string) string {
 	return "'" + strings.Replace(str, "'", "''", -1) + "'"
 }
 
-func t_load(conn *pgx.Conn, table string, sql string, args ...interface{}) error {
+func t_load(conn *pgx.Conn, table string, count int, sql string, args ...interface{}) error {
 	c, err := t_len(conn, table)
 	if err != nil {
 		return err

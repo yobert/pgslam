@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"flag"
 	"io/ioutil"
 	"math/rand"
@@ -38,6 +39,11 @@ type Config struct {
 	WorkerRate int // Per-worker
 
 	Configs []Config
+}
+func (c Config) String() string {
+	return fmt.Sprintf("db %#v %s@%s:%d %s %s x %d rate [%d/s %d/s]",
+		c.Database, c.User, c.Host, c.Port, c.Op, c.Dur,
+		c.Workers, c.Rate, c.WorkerRate)
 }
 
 func (a Config) Merge(b Config) Config {

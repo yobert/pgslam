@@ -38,11 +38,12 @@ func worker(config *Config, done chan struct{}) {
 		tab := config.Table
 		col := config.Column
 		if config.Op == "join" {
-			tab = "calendars"
-			col = "calendar_id"
+			tab = "calendar"
+			col = "id"
 		}
 
-		rows, err := conn.Query(`select ` + col + `::text from ` + tab + ` limit 1000;`)
+		sql := `select ` + col + `::text from ` + tab + ` limit 1000;`
+		rows, err := conn.Query(sql)
 		if err != nil {
 			fmt.Println(err)
 			return
@@ -97,26 +98,20 @@ func worker(config *Config, done chan struct{}) {
 			}
 		case "join":
 			res := struct {
-				CompanyID  int
-				UserID     int
-				CalendarID int
-				EventID    int
+				CalendarID string
+				EventID    string
 			}{}
 
 			err := conn.QueryRow(`
 select
-	c.company_id,
-	u.user_id,
-	ca.calendar_id,
-	e.event_id
-from companies as c
-inner join users as u on u.company_id = c.company_id
-inner join calendars as ca on ca.user_id = u.user_id
-inner join events as e on e.calendar_id = ca.calendar_id
-where ca.calendar_id = $1 and e.created_at > now() - $2::interval;`,
+	c.id,
+	r.id
+from calendar as c
+inner join reservation as r on r.calendar_id = c.id
+where c.id = $1 and r.start_datetime_utc > now() - $2::interval;`,
 				stuff[rand.Intn(len(stuff))],
-				"1 day",
-			).Scan(&res.CompanyID, &res.UserID, &res.CalendarID, &res.EventID)
+				"10 day",
+			).Scan(&res.CalendarID, &res.EventID)
 			if err != nil {
 				log.Println(err)
 				return
