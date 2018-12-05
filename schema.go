@@ -78,9 +78,9 @@ create index if not exists t5d on t5 (d);
 		return err
 	}
 
-//	if err := t_load(conn, "t1", 1e6, "insert into t1 (a) select now() from generate_series(1, COUNT);"); err != nil {
-//		return err
-//	}
+	//	if err := t_load(conn, "t1", 1e6, "insert into t1 (a) select now() from generate_series(1, COUNT);"); err != nil {
+	//		return err
+	//	}
 
 	return nil
 }

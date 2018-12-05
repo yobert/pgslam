@@ -36,9 +36,9 @@ func runconfig(config *Config) error {
 	fmt.Println(config)
 
 	//	fmt.Println("schema...")
-//	if err := prepSchema(config); err != nil {
-//		return err
-//	}
+	//	if err := prepSchema(config); err != nil {
+	//		return err
+	//	}
 
 	done := make(chan struct{})
 

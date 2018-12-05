@@ -1,8 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"runtime"
@@ -40,6 +40,7 @@ type Config struct {
 
 	Configs []Config
 }
+
 func (c Config) String() string {
 	return fmt.Sprintf("db %#v %s@%s:%d %s %s x %d rate [%d/s %d/s]",
 		c.Database, c.User, c.Host, c.Port, c.Op, c.Dur,
