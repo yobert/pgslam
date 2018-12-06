@@ -207,10 +207,6 @@ func fillout_query(sql string, args ...interface{}) string {
 	return sql
 }
 
-func quotestring(str string) string {
-	return "'" + strings.Replace(str, "'", "''", -1) + "'"
-}
-
 func t_load(conn *pgx.Conn, table string, count int, sql string, args ...interface{}) error {
 	c, err := t_len(conn, table)
 	if err != nil {

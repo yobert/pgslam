@@ -19,13 +19,15 @@ var (
 	work_mu    sync.Mutex
 	work_count int
 	work_dur   time.Duration
+	work_idle time.Duration
 )
 
 func worker(config *Config, done chan struct{}) {
+	err := func() error {
+
 	conn, err := pgx.Connect(config.ConnConfig())
 	if err != nil {
-		log.Println(err)
-		return
+		return err
 	}
 	defer conn.Close()
 
@@ -44,39 +46,34 @@ func worker(config *Config, done chan struct{}) {
 	} else if config.Op == "join" {
 		rows, err := conn.Query(`select company_id from calendar group by 1 order by random() limit 1;`)
 		if err != nil {
-			fmt.Println(err)
-			return
+			return fmt.Errorf("finding company_id: %v", err)
 		}
 		for rows.Next() {
 			if err := rows.Scan(&company_id); err != nil {
-				fmt.Println(err)
-				return
+				return fmt.Errorf("scanning company_id: %v", err)
 			}
 		}
 		if err := rows.Err(); err != nil {
-			fmt.Println(err)
-			return
+			return fmt.Errorf("reading company_id: %v", err)
 		}
-		sql = `select id from calendar where company_id = $1 order by random() limit 1000;`
+		//sql = `select id from calendar where company_id = $1 order by random() limit 1000;`
+		sql = `select id from reservation where company_id = $1 order by random() limit 10000;`
 		args = append(args, company_id)
 	}
 
-	rows, err := conn.Query(sql)
+	rows, err := conn.Query(sql, args...)
 	if err != nil {
-		fmt.Println(err)
-		return
+		return fmt.Errorf("query stuff: %v", err)
 	}
 	for rows.Next() {
 		var s string
 		if err := rows.Scan(&s); err != nil {
-			fmt.Println(err)
-			return
+			return fmt.Errorf("scanning stuff: %v", err)
 		}
 		stuff = append(stuff, s)
 	}
 	if err := rows.Err(); err != nil {
-		fmt.Println(err)
-		return
+		return fmt.Errorf("finishing stuff: %v", err)
 	}
 
 	bucket_times := make([]time.Duration, rate_buckets)
@@ -85,11 +82,12 @@ func worker(config *Config, done chan struct{}) {
 
 	worker_c := 0
 	worker_t := time.Duration(0)
+	worker_idle := time.Duration(0)
 
 	for {
 		select {
 		case _ = <-done:
-			return
+			return nil
 		default:
 		}
 
@@ -98,45 +96,38 @@ func worker(config *Config, done chan struct{}) {
 		switch config.Op {
 		case "insert":
 			if _, err := conn.Exec(`insert into `+config.Table+` (data) values ($1);`, "some crap"); err != nil {
-				log.Println(err)
-				return
+				return err
 			}
 		case "select":
 			var id int
 			err := conn.QueryRow(`select id from `+config.Table+` where `+config.Column+` = $1 limit 1;`, stuff[rand.Intn(len(stuff))]).Scan(&id)
 			if err != nil {
-				log.Println(err)
-				return
+				return err
 			}
 		case "update":
 			if _, err := conn.Exec(`update `+config.Table+` set data = $1 where `+config.Column+` = $2;`, "updated value", stuff[rand.Intn(len(stuff))]); err != nil {
-				log.Println(err)
-				return
+				return err
 			}
 		case "join":
-			res := struct {
-				CalendarID string
-				EventID    string
-			}{}
+			pemail := ""
 
-			err := conn.QueryRow(`
-select
-	c.id,
-	r.id
-from calendar as c
-inner join reservation as r on r.calendar_id = c.id
-where c.company_id = $1 and c.id = $2 and r.start_datetime_utc > now() - $3::interval;`,
+			//sql := `select p.email from reservation as r inner join participant as p on p.company_id = r.company_id and p.reservation_id = r.id where r.company_id = $1 and r.calendar_id = $2;`
+			sql := `select p.email from participant as p where p.company_id = $1 and p.reservation_id = $2`
+			args := []interface{}{
 				company_id,
 				stuff[rand.Intn(len(stuff))],
-				"10 day",
-			).Scan(&res.CalendarID, &res.EventID)
+			}
+
+			//fmt.Println(debugsql(sql, args))
+
+			err := conn.QueryRow(sql, args...).Scan(
+				&pemail,
+			)
 			if err != nil {
-				log.Println(err)
-				return
+				return fmt.Errorf("scan %v", err)
 			}
 		default:
-			log.Printf("Unknown worker operation %#v\n", config.Op)
-			return
+			return fmt.Errorf("Unknown worker operation %#v\n", config.Op)
 		}
 
 		t := time.Now()
@@ -145,9 +136,11 @@ where c.company_id = $1 and c.id = $2 and r.start_datetime_utc > now() - $3::int
 		work_mu.Lock()
 		work_count++
 		work_dur += dur
+		work_idle += worker_idle
 		work_mu.Unlock()
 
 		if config.Rate == 0 && config.WorkerRate == 0 {
+			worker_idle = 0
 			continue
 		}
 
@@ -195,6 +188,13 @@ where c.company_id = $1 and c.id = $2 and r.start_datetime_utc > now() - $3::int
 
 		if sleep > 0 {
 			time.Sleep(sleepd)
+			worker_idle = sleepd
+		} else {
+			worker_idle = 0
 		}
+	}
+	}()
+	if err != nil {
+		log.Printf("Worker error: %v\n", err)
 	}
 }

@@ -53,6 +53,7 @@ func runconfig(config *Config) error {
 	work_mu.Lock()
 	work_count = 0
 	work_dur = 0
+	work_idle = 0
 	work_mu.Unlock()
 
 	start := time.Now()
@@ -66,17 +67,29 @@ func runconfig(config *Config) error {
 		work_mu.Lock()
 		c := work_count
 		d := work_dur
+		wi := work_idle
+		work_idle = 0
 		work_mu.Unlock()
 
 		tt := time.Now()
 
+		s := tt.Sub(t).Seconds()
+		is := wi.Seconds()
+		ir := (1.0 - (is / s / float64(config.Workers))) * 100.0
+
 		if c-last_count > 0 {
-			fmt.Printf("%.2f/s %s/op\n",
-				float64(c-last_count)/tt.Sub(t).Seconds(),
-				(d-last_dur)/time.Duration(c-last_count),
+			rate := float64(c-last_count)/s
+			speed := (d-last_dur)/time.Duration(c-last_count)
+			speed = speed.Truncate(time.Microsecond)
+
+			fmt.Printf("%.2f/s %s/op (%.0f%%)\n",
+				rate,
+				speed,
+				ir,
 			)
 		} else {
-			fmt.Println("-----/s -/op")
+			fmt.Printf("-----/s -/op (%.0f%%)\n",
+				ir)
 		}
 		t = tt
 		last_count = c
