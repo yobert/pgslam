@@ -43,7 +43,7 @@ func worker(config *Config, done chan struct{}) {
 
 	if config.Op == "select" || config.Op == "update" {
 		sql = `select ` + config.Column + `::text from ` + config.Table + ` order by random() limit 1000;`
-	} else if config.Op == "join" {
+	} else if config.Op == "join" || config.Op == "updatejoin" {
 		rows, err := conn.Query(`select company_id from calendar group by 1 order by random() limit 1;`)
 		if err != nil {
 			return fmt.Errorf("finding company_id: %v", err)
@@ -57,7 +57,7 @@ func worker(config *Config, done chan struct{}) {
 			return fmt.Errorf("reading company_id: %v", err)
 		}
 		//sql = `select id from calendar where company_id = $1 order by random() limit 1000;`
-		sql = `select id from reservation where company_id = $1 order by random() limit 10000;`
+		sql = `select id from reservation where company_id = $1 order by random() limit 100000;`
 		args = append(args, company_id)
 	}
 
@@ -106,6 +106,13 @@ func worker(config *Config, done chan struct{}) {
 			}
 		case "update":
 			if _, err := conn.Exec(`update `+config.Table+` set data = $1 where `+config.Column+` = $2;`, "updated value", stuff[rand.Intn(len(stuff))]); err != nil {
+				return err
+			}
+		case "updatejoin":
+			if _, err := conn.Exec(`update reservation set description = $1 where company_id = $2 and id = $3;`,
+				fmt.Sprintf("updated value %d", rand.Intn(1e7)),
+				company_id,
+				stuff[rand.Intn(len(stuff))]); err != nil {
 				return err
 			}
 		case "join":
