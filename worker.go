@@ -126,6 +126,10 @@ func worker(config *Config, done chan struct{}) {
 					return err
 				}
 			case "sequence":
+
+				updates := 1
+				selects := 1
+
 				calendar_id := stuff[rand.Intn(len(stuff))]
 
 				start := fmt.Sprintf("%d seconds", rand.Intn(60*60*24*365))
@@ -134,7 +138,7 @@ func worker(config *Config, done chan struct{}) {
 				reservation_id := fmt.Sprintf("res-%d", rand.Int())
 				external_id := fmt.Sprintf("external-%d", rand.Int())
 
-				if _, err := conn.Exec(`insert into reservation (
+				sql := `insert into reservation (
 				company_id,
 				calendar_id,
 				title,
@@ -151,49 +155,66 @@ func worker(config *Config, done chan struct{}) {
 				($7::date + $8::interval)::timestamp,
 				($7::date + $9::interval)::date,
 				($7::date + $9::interval)::timestamp,
-				$10
-			;`,
+				$10;`
+				args := []interface{}{
 					company_id,
 					calendar_id,
 					"A sequence!",
-					"A description!!!\nNeat!\n",
+					"A description!!!",
 					"a location",
 					external_id,
 					"2018-01-01", start, dur,
 					reservation_id,
-				); err != nil {
+				}
+				fmt.Println(debugsql(sql, args))
+				if _, err := conn.Exec(sql, args...); err != nil {
 					return err
 				}
 
-				if _, err := conn.Exec(`update reservation set description = $1 where company_id = $2 and id = $3;`,
-					fmt.Sprintf("updated value %d", rand.Intn(1e7)),
-					company_id,
-					reservation_id); err != nil {
-					return err
+				for ii := 0; ii < updates; ii++ {
+					sql = `update reservation set description = $1 where company_id = $2 and id = $3;`
+					args = []interface{}{
+						fmt.Sprintf("updated value %d", rand.Intn(1e7)),
+						company_id,
+						reservation_id,
+					}
+					fmt.Println(debugsql(sql, args))
+					if _, err := conn.Exec(sql, args...); err != nil {
+						return err
+					}
+					ops++
 				}
 
-				eid := ""
-				sql := `select external_identifier from reservation where company_id = $1 and id = $2`
-				args := []interface{}{
+				for ii := 0; ii < selects; ii++ {
+					eid := ""
+					sql = `select external_identifier from reservation where company_id = $1 and id = $2`
+					args = []interface{}{
+						company_id,
+						reservation_id,
+					}
+					fmt.Println(debugsql(sql, args))
+
+					if err := conn.QueryRow(sql, args...).Scan(&eid); err != nil {
+						return err
+					}
+
+					if eid != external_id {
+						return fmt.Errorf("WTF: Expected external_id %#v: Got %#v", external_id, eid)
+					}
+					ops++
+				}
+
+				sql = `delete from reservation where company_id = $1 and id = $2;`
+				args = []interface{}{
 					company_id,
 					reservation_id,
 				}
+				fmt.Println(debugsql(sql, args))
 
-				if err := conn.QueryRow(sql, args...).Scan(&eid); err != nil {
+				if _, err := conn.Exec(sql, args...); err != nil {
 					return err
 				}
-
-				if eid != external_id {
-					return fmt.Errorf("WTF: Expected external_id %#v: Got %#v", external_id, eid)
-				}
-
-				if _, err := conn.Exec(`delete from reservation where company_id = $1 and id = $2;`,
-					company_id,
-					reservation_id); err != nil {
-					return err
-				}
-
-				ops = 4
+				ops++
 
 			case "mixed":
 				if _, err := conn.Exec(`update reservation set description = $1 where company_id = $2 and id = $3;`,
