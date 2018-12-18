@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	//	"math/rand"
+	"math/rand"
 	"os"
 	"time"
 	//	"github.com/jackc/pgx"
@@ -10,6 +10,8 @@ import (
 )
 
 func main() {
+	rand.Seed(time.Now().Unix())
+
 	if err := run(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -78,8 +80,8 @@ func runconfig(config *Config) error {
 		ir := (1.0 - (is / s / float64(config.Workers))) * 100.0
 
 		if c-last_count > 0 {
-			rate := float64(c-last_count)/s
-			speed := (d-last_dur)/time.Duration(c-last_count)
+			rate := float64(c-last_count) / s
+			speed := (d - last_dur) / time.Duration(c-last_count)
 			speed = speed.Truncate(time.Microsecond)
 
 			fmt.Printf("%.2f/s %s/op (%.0f%%)\n",
