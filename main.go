@@ -5,8 +5,6 @@ import (
 	"math/rand"
 	"os"
 	"time"
-	//	"github.com/jackc/pgx"
-	//	"github.com/schollz/progressbar"
 )
 
 func main() {
@@ -35,17 +33,21 @@ func run() error {
 }
 
 func runconfig(config *Config) error {
+	done := make(chan struct{})
+
 	fmt.Println(config)
+
+	if err := prepCluster(config, done); err != nil {
+		return err
+	}
 
 	//	fmt.Println("schema...")
 	//	if err := prepSchema(config); err != nil {
 	//		return err
 	//	}
 
-	done := make(chan struct{})
-
 	for i := 0; i < config.Workers; i++ {
-		go worker(config, done)
+		go worker(config, done, i)
 	}
 
 	// give them a second to prime and connect
@@ -102,6 +104,10 @@ func runconfig(config *Config) error {
 		}
 	}
 	close(done)
+
+	if err := destroyCluster(); err != nil {
+		return err
+	}
 
 	return nil
 }

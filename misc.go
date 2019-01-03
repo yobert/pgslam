@@ -40,3 +40,4 @@ func debugsql(sql string, params []interface{}) string {
 func quotestring(str string) string {
 	return "'" + strings.Replace(str, "'", "''", -1) + "'"
 }
+

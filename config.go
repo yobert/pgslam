@@ -3,8 +3,8 @@ package main
 import (
 	"flag"
 	"fmt"
+	"strconv"
 	"io/ioutil"
-	"math/rand"
 	"runtime"
 	"strings"
 	"time"
@@ -17,16 +17,16 @@ type Config struct {
 	// Database connection information
 	Database string
 	Host     string
-	Port     int
 	User     string
 	Password string
 
-	Op     string
-	Table  string
-	Column string
-	Vary   string
+	Nodes int
 
-	// Fields below can "Vary"
+	Prep string
+	Exec string
+	Values []ConfigValue
+
+	Vary string
 
 	// Duration of run
 	Dur time.Duration
@@ -36,15 +36,27 @@ type Config struct {
 
 	// Rate of attack
 	Rate       int // Total
-	WorkerRate int // Per-worker
+}
+type ConfigValue struct {
+	Type string
+	Value string
+}
 
-	Configs []Config
+var DefaultConfig = Config{
+	Database: "pgslam",
+	Host:     "localhost:26257",
+	User:     "pgslam",
+	Password: "pgslam",
+	Workers:  runtime.NumCPU(),
+
+	Rate: 100,
+	Dur:  time.Second * 10,
 }
 
 func (c Config) String() string {
-	return fmt.Sprintf("db %#v %s@%s:%d %s %s x %d rate [%d/s %d/s]",
-		c.Database, c.User, c.Host, c.Port, c.Op, c.Dur,
-		c.Workers, c.Rate, c.WorkerRate)
+	return fmt.Sprintf("db %#v %s@%s %s x %d [%d/s]",
+		c.Database, c.User, c.Host, c.Dur,
+		c.Workers, c.Rate)
 }
 
 func (a Config) Merge(b Config) Config {
@@ -54,24 +66,23 @@ func (a Config) Merge(b Config) Config {
 	if a.Host == "" {
 		a.Host = b.Host
 	}
-	if a.Port == 0 {
-		a.Port = b.Port
-	}
 	if a.User == "" {
 		a.User = b.User
 	}
 	if a.Password == "" {
 		a.Password = b.Password
 	}
-
-	if a.Op == "" {
-		a.Op = b.Op
+	if a.Nodes == 0 {
+		a.Nodes = b.Nodes
 	}
-	if a.Table == "" {
-		a.Table = b.Table
+	if a.Prep == "" {
+		a.Prep = b.Prep
 	}
-	if a.Column == "" {
-		a.Column = b.Column
+	if a.Exec == "" {
+		a.Exec = b.Exec
+	}
+	if len(a.Values) == 0 {
+		a.Values = b.Values
 	}
 	if a.Vary == "" {
 		a.Vary = b.Vary
@@ -85,84 +96,65 @@ func (a Config) Merge(b Config) Config {
 	if a.Rate == 0 {
 		a.Rate = b.Rate
 	}
-	if a.WorkerRate == 0 {
-		a.WorkerRate = b.WorkerRate
-	}
 	return a
 }
 
-func (config Config) ConnConfig() pgx.ConnConfig {
-	host := config.Host
-	hosts := strings.Split(host, ",")
-	if len(hosts) > 0 {
-		host = hosts[rand.Intn(len(hosts))]
+func (config Config) HostCount() int {
+	return len(strings.Split(config.Host, ","))
+}
+func (config Config) ConnConfig(hostidx int) pgx.ConnConfig {
+	hosts := strings.Split(config.Host, ",")
+
+	if hostidx >= len(hosts) {
+		return pgx.ConnConfig{}
+	}
+
+	host := hosts[hostidx]
+	hostport := strings.Split(host, ":")
+	port := uint16(5432)
+	if len(hostport) > 1 {
+		host = hostport[0]
+		p, err := strconv.Atoi(hostport[1])
+		if err == nil {
+			port = uint16(p)
+		}
 	}
 
 	return pgx.ConnConfig{
 		Database: config.Database,
 		Host:     host,
-		Port:     uint16(config.Port),
+		Port:     port,
 		User:     config.User,
 		Password: config.Password,
 	}
 }
 
-var DefaultConfig = Config{
-	Database: "pgslam",
-	Host:     "localhost",
-	User:     "pgslam",
-	Password: "pgslam",
-	Workers:  runtime.NumCPU(),
-
-	Rate: 100,
-	Dur:  time.Second * 10,
-}
-
 func getconfigs() ([]*Config, error) {
-	configs := []*Config{}
+
+	fmt.Println("default config:", DefaultConfig)
+
 	config := Config{}
 	flag.StringVar(&config.Database, "db", DefaultConfig.Database, "Database")
 	flag.StringVar(&config.Host, "host", DefaultConfig.Host, "Host")
-	flag.IntVar(&config.Port, "port", DefaultConfig.Port, "Port")
 	flag.StringVar(&config.User, "user", DefaultConfig.User, "User")
 	flag.StringVar(&config.Password, "pass", DefaultConfig.Password, "Password")
-
-	flag.StringVar(&config.Op, "op", "", "Operation")
-	flag.StringVar(&config.Table, "table", "", "Table")
-	flag.StringVar(&config.Column, "column", "", "Column")
-	flag.DurationVar(&config.Dur, "dur", DefaultConfig.Dur, "Duration")
-
 	flag.IntVar(&config.Workers, "workers", DefaultConfig.Workers, "Workers")
-
-	flag.IntVar(&config.Rate, "rate", DefaultConfig.Rate, "Operation rate per second")
-	flag.IntVar(&config.WorkerRate, "workerrate", DefaultConfig.WorkerRate, "Operation rate per second per worker")
+	flag.IntVar(&config.Rate, "rate", DefaultConfig.Rate, "Operations per second")
+	flag.DurationVar(&config.Dur, "dur", DefaultConfig.Dur, "Duration")
 	flag.Parse()
 
+	fmt.Println("config after flags:", config)
+
+	configs := []*Config{}
 	files := flag.Args()
-	if len(files) == 0 {
-		configs = append(configs, &config)
-	}
 	for _, file := range files {
 		c, err := loadconfig(file)
 		if err != nil {
 			return nil, err
 		}
-		//fmt.Println("loaded", &c)
-		more := c.Configs
-		c.Configs = nil
-
-		c = c.Merge(DefaultConfig)
-		c = config.Merge(c)
-
-		if len(more) == 0 {
-			configs = append(configs, &c)
-			//fmt.Println("append", &c)
-		}
-		for _, m := range more {
-			mm := m.Merge(c)
-			configs = append(configs, &mm)
-			//fmt.Println("append", &mm)
-		}
+		c = c.Merge(config)
+		fmt.Println(c)
+		configs = append(configs, &c)
 	}
 	return configs, nil
 }

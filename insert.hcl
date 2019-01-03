@@ -1,21 +1,27 @@
-op = "insert"
+database = "pgslam"
+host = "localhost:26257,localhost:26258,localhost:26259,localhost:26260,localhost:26261,localhost:26262,localhost:26263"
+user = "root"
 
-configs {
-	config {
-		table = "t1"
-	}
-	config {
-		table = "t2"
-	}
-	config {
-		table = "t3"
-	}
-	config {
-		table = "t4"
-	}
-	config {
-		table = "t5"
-	}
+nodes = 5
+
+prep = <<sql
+create table t (
+  id uuid not null primary key,
+  data text
+);
+sql
+
+exec = <<sql
+insert into t (id, data) values ($1, $2);
+sql
+
+values {
+  value {
+    type = "random_uuid"
+  }
+  value {
+    type = "text"
+    value = "Some test text blah blah blah blah"
+  }
 }
-
 
