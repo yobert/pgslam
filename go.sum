@@ -1,4 +1,8 @@
+github.com/alessio/shellescape v0.0.0-20170105083845-52074bc9df61 h1:htj+KnRsguEto/+0h6eehR5NtXJNdrAYyRUtJVXTkdY=
+github.com/alessio/shellescape v0.0.0-20170105083845-52074bc9df61/go.mod h1:LXmwuOUDIASgIcE8YSBlvMTSQb2O4tWJlrQiv3rJ7L8=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+github.com/gofrs/uuid v3.1.0+incompatible h1:q2rtkjaKT4YEr6E1kamy0Ha4RtepWlQBedyHx0uzKwA=
+github.com/gofrs/uuid v3.1.0+incompatible/go.mod h1:b2aQJv3Z4Fp6yNu3cdSllBxTCLRxnplIgP/c0N/04lM=
 github.com/hashicorp/hcl v1.0.0 h1:0Anlzjpi4vEasTeNFn2mLJgTSwt0+6sfsiTG8qcWGx4=
 github.com/hashicorp/hcl v1.0.0/go.mod h1:E5yfLk+7swimpb2L/Alb/PJmXilQ/rhwaUYs4T20WEQ=
 github.com/jackc/pgx v3.2.0+incompatible h1:0Vihzu20St42/UDsvZGdNE6jak7oi/UOeMzwMPHkgFY=

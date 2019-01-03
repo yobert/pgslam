@@ -32,7 +32,7 @@ func run() error {
 	return nil
 }
 
-func runconfig(config *Config) error {
+func runconfig(config Config) error {
 	done := make(chan struct{})
 
 	fmt.Println(config)
@@ -41,17 +41,14 @@ func runconfig(config *Config) error {
 		return err
 	}
 
-	//	fmt.Println("schema...")
-	//	if err := prepSchema(config); err != nil {
-	//		return err
-	//	}
+	if err := prepSchema(config); err != nil {
+		return err
+	}
 
 	for i := 0; i < config.Workers; i++ {
 		go worker(config, done, i)
 	}
 
-	// give them a second to prime and connect
-	//	fmt.Println("priming...")
 	time.Sleep(time.Second * 2)
 
 	work_mu.Lock()
@@ -105,7 +102,7 @@ func runconfig(config *Config) error {
 	}
 	close(done)
 
-	if err := destroyCluster(); err != nil {
+	if err := waitCluster(); err != nil {
 		return err
 	}
 

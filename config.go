@@ -3,9 +3,9 @@ package main
 import (
 	"flag"
 	"fmt"
-	"strconv"
 	"io/ioutil"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,8 +22,8 @@ type Config struct {
 
 	Nodes int
 
-	Prep string
-	Exec string
+	Prep   string
+	Exec   string
 	Values []ConfigValue
 
 	Vary string
@@ -35,11 +35,11 @@ type Config struct {
 	Workers int
 
 	// Rate of attack
-	Rate       int // Total
+	Rate int // Total
 }
 type ConfigValue struct {
-	Type string
-	Value string
+	Type   string
+	String string
 }
 
 var DefaultConfig = Config{
@@ -129,7 +129,7 @@ func (config Config) ConnConfig(hostidx int) pgx.ConnConfig {
 	}
 }
 
-func getconfigs() ([]*Config, error) {
+func getconfigs() ([]Config, error) {
 
 	fmt.Println("default config:", DefaultConfig)
 
@@ -145,7 +145,7 @@ func getconfigs() ([]*Config, error) {
 
 	fmt.Println("config after flags:", config)
 
-	configs := []*Config{}
+	configs := []Config{}
 	files := flag.Args()
 	for _, file := range files {
 		c, err := loadconfig(file)
@@ -154,7 +154,7 @@ func getconfigs() ([]*Config, error) {
 		}
 		c = c.Merge(config)
 		fmt.Println(c)
-		configs = append(configs, &c)
+		configs = append(configs, c)
 	}
 	return configs, nil
 }

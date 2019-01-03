@@ -1,11 +1,13 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"math/rand"
 	"sync"
 	"time"
 
+	"github.com/gofrs/uuid"
 	"github.com/jackc/pgx"
 )
 
@@ -21,9 +23,9 @@ var (
 	work_idle  time.Duration
 )
 
-func worker(config *Config, done chan struct{}, worker_i int) {
+func worker(config Config, done chan struct{}, worker_i int) {
 	err := func() error {
-		hostcount := config.HostCount()
+		hostcount := config.Nodes // config.HostCount()
 
 		conn, err := pgx.Connect(config.ConnConfig(worker_i % hostcount))
 		if err != nil {
@@ -54,7 +56,26 @@ func worker(config *Config, done chan struct{}, worker_i int) {
 			start := time.Now()
 			ops := 1
 
-			// put operation here.
+			sql := config.Exec
+			values := []interface{}{}
+			for _, v := range config.Values {
+				switch v.Type {
+				case "random_uuid":
+					id, err := uuid.NewV4()
+					if err != nil {
+						return err
+					}
+					values = append(values, id.String())
+				case "text":
+					values = append(values, v.String)
+				default:
+					return fmt.Errorf("Unhandled config value type %#v", v.Type)
+				}
+			}
+			//log.Println(debugsql(sql, values))
+			if _, err := conn.Exec(sql, values...); err != nil {
+				return err
+			}
 
 			t := time.Now()
 			dur := t.Sub(start)
