@@ -60,3 +60,7 @@ func debugcmd(cmd string, args []string) string {
 	}
 	return strings.Join(quoted, " ")
 }
+
+func plotquote(str string) string {
+	return "\"" + strings.Replace(str, "\"", "\\\"", -1) + "\""
+}

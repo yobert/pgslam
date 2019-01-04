@@ -17,9 +17,9 @@ type node struct {
 	err  chan error
 }
 
-var nodes []*node
+func prepCluster(config Config, done chan struct{}) ([]*node, error) {
+	var nodes []*node
 
-func prepCluster(config Config, done chan struct{}) error {
 	hosts := strings.Split(config.Host, ",")
 
 	for ni := 0; ni < config.Nodes; ni++ {
@@ -27,16 +27,17 @@ func prepCluster(config Config, done chan struct{}) error {
 		if ni == 0 {
 			join = ""
 		}
-		if err := prepNode(hosts[ni], join, done); err != nil {
-			return err
+		node, err := prepNode(hosts[ni], join, done)
+		if err != nil {
+			return nil, err
 		}
+		nodes = append(nodes, node)
 		time.Sleep(time.Second * 1)
 	}
-
-	return nil
+	return nodes, nil
 }
 
-func prepNode(host, join string, done chan struct{}) error {
+func prepNode(host, join string, done chan struct{}) (*node, error) {
 	n := node{
 		host: host,
 		err:  make(chan error),
@@ -47,12 +48,18 @@ func prepNode(host, join string, done chan struct{}) error {
 
 	hostport := strings.Split(host, ":")
 	hostname := hostport[0]
-	portstr := hostport[1]
+	portstr := "26257"
+	if len(hostport) > 1 {
+		portstr = hostport[1]
+	}
 	port, err := strconv.Atoi(portstr)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	httpport := port - 10000
+	if port == 26257 {
+		httpport = 8080
+	}
 
 	go func() {
 		err := func() error {
@@ -102,7 +109,7 @@ func prepNode(host, join string, done chan struct{}) error {
 				cancel()
 			}()
 
-			if err := cmd.Wait(); err != nil {
+			if err := cmd.Wait(); err != nil && err.Error() != "signal: killed" {
 				return err
 			}
 
@@ -112,11 +119,10 @@ func prepNode(host, join string, done chan struct{}) error {
 		n.err <- err
 	}()
 
-	nodes = append(nodes, &n)
-	return nil
+	return &n, nil
 }
 
-func waitCluster() error {
+func waitCluster(nodes []*node) error {
 	var err error
 
 	for _, n := range nodes {

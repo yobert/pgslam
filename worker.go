@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"math/rand"
 	"sync"
 	"time"
@@ -23,7 +22,9 @@ var (
 	work_idle  time.Duration
 )
 
-func worker(config Config, done chan struct{}, worker_i int) {
+func worker(config Config, done chan struct{}, worker_i int, errs chan error, workerdata chan [][]float64) {
+
+	databuf := [][]float64{}
 	err := func() error {
 		hostcount := config.Nodes // config.HostCount()
 
@@ -45,6 +46,8 @@ func worker(config Config, done chan struct{}, worker_i int) {
 		worker_c := 0
 		worker_t := time.Duration(0)
 		worker_idle := time.Duration(0)
+
+		datastart := time.Now()
 
 		for {
 			select {
@@ -79,6 +82,11 @@ func worker(config Config, done chan struct{}, worker_i int) {
 
 			t := time.Now()
 			dur := t.Sub(start)
+
+			databuf = append(databuf, []float64{
+				t.Sub(datastart).Seconds(),
+				dur.Seconds(),
+			})
 
 			work_mu.Lock()
 			work_count += ops
@@ -141,7 +149,6 @@ func worker(config Config, done chan struct{}, worker_i int) {
 			}
 		}
 	}()
-	if err != nil {
-		log.Printf("Worker error: %v\n", err)
-	}
+	errs <- err
+	workerdata <- databuf
 }

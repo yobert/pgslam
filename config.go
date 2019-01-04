@@ -14,6 +14,8 @@ import (
 )
 
 type Config struct {
+	Configs []Config
+
 	// Database connection information
 	Database string
 	Host     string
@@ -57,6 +59,16 @@ func (c Config) String() string {
 	return fmt.Sprintf("db %#v %s@%s %s x %d [%d/s]",
 		c.Database, c.User, c.Host, c.Dur,
 		c.Workers, c.Rate)
+}
+
+func (c Config) TitleParts() []string {
+	return []string{
+		fmt.Sprintf("%d nodes", c.Nodes),
+		fmt.Sprintf("%d workers", c.Workers),
+		fmt.Sprintf("rate %d/s", c.Rate),
+		strings.TrimSpace(c.Prep),
+		strings.TrimSpace(c.Exec),
+	}
 }
 
 func (a Config) Merge(b Config) Config {
@@ -111,7 +123,7 @@ func (config Config) ConnConfig(hostidx int) pgx.ConnConfig {
 
 	host := hosts[hostidx]
 	hostport := strings.Split(host, ":")
-	port := uint16(5432)
+	port := uint16(26257)
 	if len(hostport) > 1 {
 		host = hostport[0]
 		p, err := strconv.Atoi(hostport[1])
@@ -131,8 +143,6 @@ func (config Config) ConnConfig(hostidx int) pgx.ConnConfig {
 
 func getconfigs() ([]Config, error) {
 
-	fmt.Println("default config:", DefaultConfig)
-
 	config := Config{}
 	flag.StringVar(&config.Database, "db", DefaultConfig.Database, "Database")
 	flag.StringVar(&config.Host, "host", DefaultConfig.Host, "Host")
@@ -143,8 +153,6 @@ func getconfigs() ([]Config, error) {
 	flag.DurationVar(&config.Dur, "dur", DefaultConfig.Dur, "Duration")
 	flag.Parse()
 
-	fmt.Println("config after flags:", config)
-
 	configs := []Config{}
 	files := flag.Args()
 	for _, file := range files {
@@ -152,9 +160,17 @@ func getconfigs() ([]Config, error) {
 		if err != nil {
 			return nil, err
 		}
+		more := c.Configs
+		c.Configs = nil
 		c = c.Merge(config)
-		fmt.Println(c)
-		configs = append(configs, c)
+
+		if len(more) == 0 {
+			configs = append(configs, c)
+		}
+		for _, m := range more {
+			mm := m.Merge(c)
+			configs = append(configs, mm)
+		}
 	}
 	return configs, nil
 }
