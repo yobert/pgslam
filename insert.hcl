@@ -3,8 +3,10 @@ host = "localhost:26257,localhost:26258,localhost:26259,localhost:26260,localhos
 user = "root"
 
 // As fast as you can!
-workers = 100
-rate = 1000000
+//workers = 100
+//rate = 1000000
+workers = 3
+rate = 100
 
 prep = <<sql
 create table t (

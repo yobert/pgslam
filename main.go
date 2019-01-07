@@ -1,11 +1,11 @@
 package main
 
 import (
-	"log"
-	"strings"
 	"fmt"
+	"log"
 	"math/rand"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -78,9 +78,9 @@ plot \`)
 		}
 		title := strings.Join(titleparts, ", ")
 		if title == "" {
-			title = fmt.Sprintf("config %d", i + 1)
+			title = fmt.Sprintf("config %d", i+1)
 		}
-		color := colors[i % len(colors)]
+		color := colors[i%len(colors)]
 		fmt.Fprintln(plot, plotquote(datafilename)+" using 1:2 title "+plotquote("mean "+title)+" lw 2 dt 1 lc "+plotquote(color)+",\\")
 		fmt.Fprintln(plot, plotquote(datafilename)+" using 1:3 title "+plotquote("99% "+title)+" lw 1 dt 2 lc "+plotquote(color)+",\\")
 
@@ -108,7 +108,10 @@ func runconfig(config Config, datafilename string) error {
 	}
 
 	errs := make(chan error, config.Workers)
-	workerdata := make(chan [][]float64, config.Workers)
+	workerdata := make(chan []Sample)
+	metricserr := make(chan error)
+
+	go processMetrics(datafilename, workerdata, metricserr)
 
 	for i := 0; i < config.Workers; i++ {
 		go worker(config, done, i, errs, workerdata)
@@ -167,23 +170,23 @@ func runconfig(config Config, datafilename string) error {
 	}
 	close(done)
 
-	// wait for workers to finish, collecting errors, and
-	// aggregating all metrics for final sort and processing
-	alldata := [][]float64{}
+	// wait for workers to finish, collecting errors
 	for i := 0; i < config.Workers; i++ {
 		err := <-errs
 		if err != nil {
 			log.Println("Worker:", err)
 		}
-		wd := <-workerdata
-		alldata = append(alldata, wd...)
 	}
 
 	fmt.Println("workers complete")
+	close(workerdata)
 
-	if err := processMetrics(datafilename, alldata); err != nil {
+	fmt.Println("waiting for metrics to finish...")
+	if err := <-metricserr; err != nil {
 		return err
 	}
+
+	fmt.Println("metrics processing complete")
 
 	if err := waitCluster(nodes); err != nil {
 		return err

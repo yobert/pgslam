@@ -22,9 +22,11 @@ var (
 	work_idle  time.Duration
 )
 
-func worker(config Config, done chan struct{}, worker_i int, errs chan error, workerdata chan [][]float64) {
+func worker(config Config, done chan struct{}, worker_i int, errs chan error, workerdata chan []Sample) {
 
-	databuf := [][]float64{}
+	databuf := []Sample{}
+	databuftime := time.Now()
+
 	err := func() error {
 		hostcount := config.Nodes // config.HostCount()
 
@@ -47,11 +49,12 @@ func worker(config Config, done chan struct{}, worker_i int, errs chan error, wo
 		worker_t := time.Duration(0)
 		worker_idle := time.Duration(0)
 
-		datastart := time.Now()
-
 		for {
 			select {
 			case _ = <-done:
+				if len(databuf) > 0 {
+					workerdata <- databuf
+				}
 				return nil
 			default:
 			}
@@ -83,10 +86,16 @@ func worker(config Config, done chan struct{}, worker_i int, errs chan error, wo
 			t := time.Now()
 			dur := t.Sub(start)
 
-			databuf = append(databuf, []float64{
-				t.Sub(datastart).Seconds(),
-				dur.Seconds(),
+			databuf = append(databuf, Sample{
+				Time:    t,
+				Latency: dur,
 			})
+
+			if t.Sub(databuftime) > bucketwindow {
+				workerdata <- databuf
+				databuf = nil
+				databuftime = t
+			}
 
 			work_mu.Lock()
 			work_count += ops
@@ -149,6 +158,10 @@ func worker(config Config, done chan struct{}, worker_i int, errs chan error, wo
 			}
 		}
 	}()
-	errs <- err
+
+	fmt.Println("worker sending final data...")
 	workerdata <- databuf
+	fmt.Println("worker sending final err...")
+	errs <- err
+	fmt.Println("worker done")
 }
